@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Qasid Human Resources Portal</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link href="main.css" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar navbar-dark" style="background-color: #8c0c04;">
+        <a class="navbar-brand" href="#">Qasid HR</a>
+        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#collapseTopTen" aria-expanded="false" aria-controls="collapseTopTen" id="summaryBtn">Summarized Data
+          </button>
+        <span class="navbar-text" id="sign-in-status"></span>
+        <span class="navbar-text" id="sign-in"></span>
+        <span class="navbar-text" id="account-details"></span>
+        <button class="btn my-2 my-sm-0" id="signoutBtn">Sign Out</button>
+        <a class="btn my-2 my-sm-0" href="index.html" role="button" id="signinBtn">Sign In</a>
+    </nav>
+    <div class="modal fade" id="loadingModal" tabindex="-1" role="dialog" aria-labelledby="loadingModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loadingModalLabel">Loading Data...</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="collapse" id="collapseTopTen">
+        <div class="card card-body" id="toptenContainer">
+            <div class="row">
+                <div class="col">
+                    <ul class="list-group" id="toptenList">
+                    </ul>
+                </div>
+                <div class="col">
+                    <ul class="list-group" id="bottenList">
+                    </ul>
+                </div>
+                <div class="col">
+                    <ul class="list-group" id="fullList">
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="reportPage">
+        <h3>Employee Monthly Attendance Report</h3>
+        <form class="form-inline">
+            <label class="input-group-text" for="inputTeacherSelect" id="inputTeacherLabel">Employee</label>
+            <select class="custom-select" id="inputTeacherSelect"></select>
+            <label class="input-group-text" for="inputYearSelect">Year</label>
+            <select class="custom-select" id="inputYearSelect"></select>
+            <label class="input-group-text" for="inputMonthSelect">Month</label>
+            <select class="custom-select" id="inputMonthSelect"></select>
+            <button type="button" class="btn btn-primary" id="getDataBtn">Get Data</button>
+        </form>
+        <p id="employeeInfo" class="lead"></p>
+        <p id="summaryWork" class="lead"></p>
+        <div id="displayData">
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    <script src="https://www.gstatic.com/firebasejs/4.10.0/firebase.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/4.9.1/firebase-auth.js"></script>
+    <script type="text/javascript">
+        let start_date = new Date();
+        let end_date = new Date();
+        let loggedin_email = "";
+        let offsetString = "";
+        let user_email = "";
+        let clockit_data = new Object();
+        let employee_data = new Object();
+        let employee_profile = new Object();
+        let calendar_data = new Array();
+        const header_row = "<thead><tr><th scope='col'>Date</th><th scope='col'>Time In</th><th scope='col'>Time Out</th><th scope='col'>Actual Work Hours</th></tr></thead>";
+        let required_total = 0;
+        let actual_total = 0;
+        let percent_work = 0;
+        let months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        let years = [0, 1, 2];
+        let users = new Array();
+        let top_ten = new Array();
+        let summaryData = false;
+        let datesDDInitialized = false;
+
+        // Initialize Firebase //Replace with your firebase key
+        const config = {
+            apiKey: "",
+            authDomain: "",
+            databaseURL: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: ""
+        };
+        firebase.initializeApp(config);
+        
+        function calculateTimeOffset(date2calc) {
+            let toffset = date2calc.getTimezoneOffset();
+            let gmtoff = 0;
+            gmtoff = Math.abs(toffset)/60;
+            if (toffset < 0) {
+                offsetString = "+"+pad(gmtoff);
+            } else {
+                offsetString = "-"+pad(gmtoff);
+            }
+        }
+
+        initApp = function() {
+            firebase.auth().onAuthStateChanged(function(user) {
+                if (user) {
+                    // User is signed in.
+                    var displayName = user.displayName;
+                    var email = user.email;
+                    var emailVerified = user.emailVerified;
+                    var photoURL = user.photoURL;
+                    var uid = user.uid;
+                    var phoneNumber = user.phoneNumber;
+                    var providerData = user.providerData;
+                    user.getIdToken().then(function(accessToken) {
+                        loggedin_email = email;
+                        $("#account-details").html(email);
+                        $("#signinBtn").css("display", "none");
+                        $("#signoutBtn").css("display", "block");
+                        getUserPermission();
+                    });
+                } else {
+                    // User is signed out.
+                    $("#account-details").html("");
+                    $("#signinBtn").css("display", "block");
+                    $("#signoutBtn").css("display", "none");
+                    window.location.replace("index.html");
+                }
+            }, function(error) {
+                console.log(error);
+            });
+        };
+
+        window.addEventListener('load', function() {
+            initApp()
+        });
+
+        function getUserPermission() {
+            firebase.database().ref("/users/").once("value").then(function(snapshot) {
+                //console.log(snapshot.val());
+                users = snapshot.val();
+                $.each(users, function(index, value) {
+                    if (value.Email == loggedin_email) {
+                        if (value.Status == "active") {
+                            if ((value.Role == "teacher") || (value.Role == "support")) {
+                                $("#inputTeacherLabel").css("display", "none");
+                                $("#inputTeacherSelect").css("display", "none");
+                                $("#inputTeacherSelect").css("display", "none");
+                                $("#summaryBtn").css("display", "none");
+                                initializeData("teacher");
+                            } else if ((value.Role == "admin") || (value.Role == "superadmin")) {
+                                $("#inputTeacherLabel").css("display", "block");
+                                $("#inputTeacherSelect").css("display", "block");
+                                $("#summaryBtn").css("display", "block");
+                                populateTeacherList();
+                                initializeData("admin");
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        function populateTeacherList() {
+            let teacherDDText = "<option value=''>-Select an Employee-</option>";
+            $.each(users, function(index, value) {
+                if (value.Status == "active") {
+                    if ((value.Role == "teacher") || (value.Role == "support") || (value.Role == "admin")) {
+                        teacherDDText += "<option value='" + value.Email.toString() + "'>" + value.Name + "</option>";
+                    }
+                }
+
+            });
+            $("#inputTeacherSelect").html(teacherDDText);
+        }
+
+        $("#inputTeacherSelect").on("change", function() {
+            //loggedin_email = "support@qasid.com";
+            //console.log($(this).val());
+            if ($(this).val() != "") {
+                user_email = $(this).val();
+                initializeData("admin");
+            } else {
+                alert("Please select an employee");
+            }
+        });
+
+        function initializeData(userType) {
+            if (userType == "teacher") {
+                //user_email = "sami@qasid.com";
+                user_email = loggedin_email;
+            }
+            if (($("#inputYearSelect").val() == null) && (userType == "admin") || (userType == "teacher")) {
+                let current_date = new Date();
+                let date1 = current_date.toISOString().substring(0, 8) + "01";
+                let date2 = current_date.toISOString().substring(0, 10);
+                let monthDDText = "";
+                let yearDDText = "";
+                $.each(months, function(index, value) {
+                    monthDDText += "<option value='" + index.toString() + "'>" + value + "</option>";
+                });
+                $.each(years, function(index, value) {
+                    let thisyear = current_date.getFullYear() - index;
+                    yearDDText += "<option value='" + thisyear.toString() + "'>" + thisyear.toString() + "</option>";
+                });
+                $("#inputMonthSelect").html(monthDDText);
+                $("#inputYearSelect").html(yearDDText);
+                $("#inputMonthSelect").val(current_date.getMonth().toString());
+                $("#inputYearSelect").val(current_date.getFullYear().toString());
+                console.log(date2);
+                if (userType == "teacher") {
+                    getData(date1, date2, current_date.getMonth(), current_date.getFullYear(), false);
+                }
+            }
+        }
+
+        function findDates() {
+            let current_date = new Date();
+            let selectedYear = Number($("#inputYearSelect").val());
+            let selectedMonth = Number($("#inputMonthSelect").val());
+            let firstDay = new Date(selectedYear, selectedMonth, 1);
+            let lastDay = new Date(selectedYear, selectedMonth + 1, 0);
+            if (current_date < lastDay) {
+                lastDay = current_date;
+            }
+            let date1 = firstDay.getFullYear() + "-" + (firstDay.getMonth() + 1).toString() + "-" + firstDay.getDate();
+            let date2 = lastDay.getFullYear() + "-" + (lastDay.getMonth() + 1).toString() + "-" + lastDay.getDate();
+            return {
+                date1: date1,
+                date2: date2,
+                firstDay: firstDay
+            };
+        }
+
+        $("#getDataBtn").on("click", function() {
+            //loggedin_email = "support@qasid.com";
+            let dateRange = findDates();
+            getData(dateRange.date1, dateRange.date2, dateRange.firstDay.getMonth(), dateRange.firstDay.getFullYear(), false);
+        });
+
+        $("#signoutBtn").on("click", function() {
+            firebase.auth().signOut().then(function() {
+                // Sign-out successful.
+                //console.log("signed out");
+            }).catch(function(error) {
+                // An error happened.
+                console.log("error");
+            });
+        });
+
+        function getData(dateStart, dateEnd, month, year, summary) {
+            $('#loadingModal').modal('show');
+            let request = new XMLHttpRequest();
+            summaryData = summary;
+
+            request.open("GET", "?start_date=" + dateStart + "&end_date=" + dateEnd);//Replace with your API endpoint
+
+            request.setRequestHeader('Content-Type', 'application/json');
+            request.setRequestHeader('Authorization', '');//Replace with your API key
+
+            request.onreadystatechange = function() {
+                if ((this.readyState === 4) && (this.status == 200)) {
+                    //console.log('Status:', this.status);
+                    //console.log('Headers:', this.getAllResponseHeaders());
+                    //console.log('Body:', this.responseText);
+                    clockit_data = JSON.parse(this.responseText);
+                    getCalendar(month + 1, year);
+                } else {
+                    console.log("error connecting to clockit");
+                }
+            };
+
+            request.send();
+        }
+
+        function getCalendar(month, year) {
+            $('#loadingModal').modal('show');
+
+            let request = new XMLHttpRequest();
+
+            request.open("GET", "https://api.airtable.com/v0//" + year + "?fields%5B%5D=Date&filterByFormula=MONTH(Date)%3D" + month.toString() + "&view=web");//Replace with your Airtable Table ID
+
+            request.setRequestHeader('Content-Type', 'application/json');
+            request.setRequestHeader('Authorization', 'Bearer '); //Replace with your airtable key
+
+            request.onreadystatechange = function() {
+                if ((this.readyState === 4) && (this.status == 200)) {
+                    //console.log('Status:', this.status);
+                    //console.log('Headers:', this.getAllResponseHeaders());
+                    $.each(JSON.parse(this.responseText).records, function(index, value) {
+                        calendar_data[value.fields.Date] = value.fields.Date;
+                    });
+                    if (summaryData) {
+                        calculateSummary();
+                    } else {
+                        processData(user_email);
+                    }
+                } else {
+                    console.log("error connecting to clockit");
+                }
+            };
+            request.send();
+        }
+
+        function parseTime(milliseconds, format) {
+            //Get hours from milliseconds
+            var hours = milliseconds / (1000 * 60 * 60);
+            var absoluteHours = Math.floor(hours);
+            var h = absoluteHours > 9 ? absoluteHours : '0' + absoluteHours;
+
+            //Get remainder from hours and convert to minutes
+            var minutes = (hours - absoluteHours) * 60;
+            var absoluteMinutes = Math.floor(minutes);
+            var m = absoluteMinutes > 9 ? absoluteMinutes : '0' + absoluteMinutes;
+
+            //Get remainder from minutes and convert to seconds
+            var seconds = (minutes - absoluteMinutes) * 60;
+            var absoluteSeconds = Math.floor(seconds);
+            var s = absoluteSeconds > 9 ? absoluteSeconds : '0' + absoluteSeconds;
+
+            if (format == "hh") {
+                return h;
+            } else if (format == "hh:mm") {
+                return h + ':' + m;
+            } else if (format == "hh:mm:ss") {
+                return h + ':' + m + ':' + s;
+            }
+        }
+
+        function renderData() {
+            if (Object.keys(employee_data).length > 0) {
+                let displayText = "<table class='table table-striped'><tbody>" + header_row;
+                $.each(employee_data, function(index, value) {
+                    let thisDate = new Date(index);
+                    displayText += "<tr><th scope='row'>" + thisDate.toDateString() + "</th><td>" + value.time_in + "</td><td>" + value.time_out + "</td><td>" + value.actual_hours + "</td></tr>";
+                });
+                displayText += "</tbody></table>";
+                $("#displayData").html(displayText);
+                $("#employeeInfo").html(employee_profile.name + " | " + employee_profile.template + " | " + employee_profile.department);
+                $("#summaryWork").html("Total hours worked: " + parseTime(actual_total, "hh:mm") + " hh:mm | Required hours: " + parseTime(required_total, "hh:mm") + " hh:mm | Percentage: " + percent_work.toFixed(1) + " %");
+            } else {
+                $("#employeeInfo").html("");
+                $("#summaryWork").html("");
+                $("#displayData").html("No data was found for that period");
+            }
+            $('#loadingModal').modal('hide');
+        }
+
+        function pad(n) {
+            return (n < 10) ? ("0" + n) : n;
+        }
+
+        function calculateSummary() {
+            let employee_percent_work = 0;
+            top_ten = [];
+            $.each(users, function(index, value) {
+                if (value.Status == "active") {
+                    if ((value.Role == "teacher") || (value.Role == "support") || (value.Role == "admin")) {
+                        employee_percent_work = processData(value.Email);
+                        if (employee_percent_work != "NA") {
+                            top_ten.push({
+                                Name: value.Name,
+                                Email: value.Email,
+                                percent: employee_percent_work
+                            });
+                        }
+
+                    }
+                }
+            });
+            top_ten.sort(function(a, b) {
+                return a.percent - b.percent
+            });
+            renderSummary("bot");
+            top_ten.sort(function(a, b) {
+                return b.percent - a.percent
+            });
+            renderSummary("top");
+            renderSummary("full");
+        }
+
+        function renderSummary(type) {
+            let displayText = "";
+            if (type == "top") {
+                displayText = "<li class='list-group-item active'>Top Ten</li>";
+            } else if (type == "bot") {
+                displayText = "<li class='list-group-item active'>Bottom Ten</li>";
+            } else {
+                displayText = "<li class='list-group-item active'>Full List</li>";
+            }
+            $.each(top_ten, function(index, value) {
+                if (type == "full") {
+                    displayText += "<li class='list-group-item d-flex justify-content-between align-items-center'>" + value.Name + "<span class='badge badge-primary badge-pill'>" + value.percent.toFixed(1).toString() + " %</span></li>";
+                } else {
+                    if (index < 10) {
+                        displayText += "<li class='list-group-item d-flex justify-content-between align-items-center'>" + value.Name + "<span class='badge badge-primary badge-pill'>" + value.percent.toFixed(1).toString() + " %</span></li>";
+                    }
+                }
+            });
+            if (type == "top") {
+                $("#toptenList").html(displayText);
+            } else if (type == "bot") {
+                $("#bottenList").html(displayText);
+            } else {
+                $("#fullList").html(displayText);
+            }
+            $('#loadingModal').modal('hide');
+        }
+
+        function processData(email) {
+            var foundname = false;
+            employee_data = {};
+            actual_total = 0;
+            required_total = 0;
+            //console.log(calendar_data);
+            $.each(clockit_data.data, function(index, value) {
+                $.each(value.employees, function(i, v) {
+                    if (v.email == email) {
+                        let thisDate = new Date(value.date);
+                        calculateTimeOffset(thisDate);
+                        if ((v.first_name != null) && (foundname == false)) {
+                            employee_profile = {
+                                "name": v.first_name + " " + v.last_name,
+                                "template": v.template_name,
+                                "department": v.department_name
+                            };
+                            foundname = true;
+                        }
+                        if (calendar_data[value.date]) {
+                            let template_times = v.template_name;
+                            let t_start = "";
+                            let t_end = "";
+                            let punch_in_iso = "";
+                            let punch_out_iso = "";
+                            let ampm1 = template_times.substring(template_times.lastIndexOf(" - ") - 2, template_times.lastIndexOf(" - "));
+                            let mm1 = template_times.substring(template_times.lastIndexOf(" - ") - 5, template_times.lastIndexOf(" - ") - 3);
+                            if (ampm1 == "AM") {
+                                t_start = value.date + "T" + pad(template_times.substring(0, template_times.lastIndexOf(" - ") - 6)) + ":" + mm1 + ":00"+offsetString+":00";
+                            } else {
+                                let nonpmvalue = Number(template_times.substring(0, template_times.lastIndexOf(" - ") - 6)) + 12;
+                                t_start = value.date + "T" + pad(nonpmvalue) + ":" + mm1 + ":00"+offsetString+":00";
+                            }
+                            let template_start = new Date(t_start);
+                            let ampm2 = template_times.substring(template_times.length - 2, template_times.length);
+                            let mm2 = template_times.substring(template_times.length - 5, template_times.length - 3);
+                            if (ampm2 == "AM") {
+                                t_end = value.date + "T" + pad(template_times.substring(template_times.lastIndexOf(" - ") + 3, template_times.length - 6)) + ":" + mm2 + ":00"+offsetString+":00";
+                            } else {
+                                let timevalue = Number(template_times.substring(template_times.lastIndexOf(" - ") + 3, template_times.length - 6));
+                                let nonpmvalue = 0;
+                                if (timevalue == 12) {
+                                    nonpmvalue = timevalue;
+                                } else {
+                                    nonpmvalue = timevalue + 12;
+                                }
+                                t_end = value.date + "T" + pad(nonpmvalue) + ":" + mm2 + ":00"+offsetString+":00";
+                            }
+                            let template_end = new Date(t_end);
+                            if (v.punched_in != null) {
+                                punch_in_iso = v.punched_in.replace(" ", "T") +offsetString+":00";
+                            } else {
+                                punch_in_iso = "0000-00-00T00:00:00"+offsetString+":00";
+                            }
+                            let punch_in = new Date(punch_in_iso);
+                            if (v.punched_out != null) {
+                                punch_out_iso = v.punched_out.replace(" ", "T") + offsetString+":00";
+                            } else {
+                                punch_out_iso = "0000-00-00T00:00:00"+offsetString+":00";
+                            }
+                            let punch_out = new Date(punch_out_iso);
+                            let total_work = 0;
+                            if (punch_out > punch_in) {
+                                let late_start = 0;
+                                let early_leave = 0;
+                                if (punch_in - template_start > 0) {
+                                    late_start = punch_in - template_start;
+                                }
+                                if (template_end - punch_out > 0) {
+                                    early_leave = template_end - punch_out;
+                                }
+                                total_work = (template_end - template_start - late_start - early_leave);
+                            } else {
+                                total_work = 0;
+                            }
+                            employee_data[value.date] = {
+                                "time_in": punch_in.toLocaleTimeString(),
+                                "time_out": punch_out.toLocaleTimeString(),
+                                "actual_hours": parseTime(total_work, "hh:mm:ss")
+                            };
+                            actual_total += total_work;
+                            let required_work = template_end - template_start;
+                            required_total += required_work;
+                        }
+                    }
+                });
+            });
+            //console.log(employee_data);
+            if (required_total != 0) {
+                percent_work = actual_total / required_total * 100;
+            } else {
+                percent_work = "NA";
+            }
+            if (!summaryData) {
+                renderData();
+            } else {
+                return percent_work;
+            }
+        }
+
+        $('#collapseTopTen').on('shown.bs.collapse', function() {
+            // go through teacher data and find top ten and bottom ten
+            console.log($("#inputYearSelect").val());
+            if ($("#inputYearSelect").val() != null) {
+                let dateRange = findDates();
+                getData(dateRange.date1, dateRange.date2, dateRange.firstDay.getMonth(), dateRange.firstDay.getFullYear(), true);
+            } else {
+                alert("Please select a teacher, year and month");
+            }
+
+        })
+    </script>
+</body>
+
+</html>

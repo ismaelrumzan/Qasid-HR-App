@@ -1,0 +1,26 @@
+body {
+    /**display: -ms-flexbox;
+    display: -webkit-box;
+    display: flex;
+    -ms-flex-align: center;
+    -ms-flex-pack: center;
+    -webkit-box-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    justify-content: center;
+    **/
+    padding-top: 2em;
+    padding-bottom: 2em;
+    background-color: #8c0c04;
+    height: 100%;
+}
+
+.container h3,
+.container h4 {
+    text-align: center;
+    color: whitesmoke;
+}
+
+.container h3 {
+    padding-top: 1em;
+}

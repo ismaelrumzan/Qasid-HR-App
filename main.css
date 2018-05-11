@@ -1,0 +1,21 @@
+#reportPage {
+    padding: 0.5em;
+}
+
+.form-inline .custom-select {
+    width: auto;
+}
+
+#employeeInfo {
+    padding-top: 0.7em;
+}
+
+.input-group-text,
+#getDataBtn {
+    margin-left: 0.5em;
+}
+
+.container-fluid,
+#lateTeachersList {
+    margin-top: 0.5em;
+}
